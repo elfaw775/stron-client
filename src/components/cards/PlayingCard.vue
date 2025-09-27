@@ -1,19 +1,18 @@
 <template>
   <div 
-    ref="cardRef"
     :class="cardClasses"
     :style="cardStyle"
     @click="handleCardClick"
+    @dblclick="handleCardDoubleClick"                                                                                    
   >
     <div class="card-content">
       <div class="card-header">
         <span class="card-number">{{ cardNumber }}</span>
-        <div class="drag-handle" v-if="isDraggable">
-          <div class="drag-dots"></div>
-        </div>
+        <span class="card-type">📝</span>
       </div>
       <div class="card-body">
         <p class="card-text">{{ truncatedContent }}</p>
+        <p v-if="card.messageRange" class="card-range">{{ card.messageRange }}</p>
       </div>
       <div class="card-footer">
         <span class="card-time">{{ formatTime(card.timestamp) }}</span>
@@ -23,14 +22,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useDraggable } from '@/composables/useDraggable'
+import { computed } from 'vue'
 
 interface Card {
   id: string
   content: string
   timestamp: Date
-  sender: 'user' | 'assistant'
+  sender: 'summary'
+  messageRange?: string
+  originalMessages?: any[]
 }
 
 const props = defineProps<{
@@ -39,35 +39,12 @@ const props = defineProps<{
   totalCards: number
   isSelected: boolean
   isCollapsed: boolean
-  isDraggable?: boolean
-  dragPosition?: { x: number; y: number }
 }>()
 
 const emit = defineEmits<{
   select: [id: string]
-  dragStart: [id: string]
-  dragEnd: [id: string, position: { x: number; y: number }]
+  reply: [card: Card]
 }>()
-
-const cardRef = ref<HTMLElement | null>(null)
-const { isDragging, position, setPosition, initializePosition } = useDraggable(cardRef)
-
-// 监听拖拽模式变化
-watch(() => props.isDraggable, (isDraggable) => {
-  if (isDraggable) {
-    // 进入拖拽模式时，初始化位置
-    setTimeout(() => {
-      initializePosition()
-    }, 100)
-  }
-})
-
-// 监听外部传入的拖拽位置变化
-watch(() => props.dragPosition, (newPosition) => {
-  if (newPosition && props.isDraggable) {
-    setPosition(newPosition)
-  }
-}, { immediate: true })
 
 const cardNumber = computed(() => props.index + 1)
 
@@ -83,25 +60,11 @@ const cardClasses = computed(() => [
   {
     'selected': props.isSelected,
     'collapsed': props.isCollapsed,
-    'dragging': isDragging.value,
-    'draggable': props.isDraggable,
-    'user-card': props.card.sender === 'user',
-    'assistant-card': props.card.sender === 'assistant'
+    'summary-card': props.card.sender === 'summary'
   }
 ])
 
 const cardStyle = computed(() => {
-  const baseStyle: any = {}
-  
-  // 如果是可拖拽的，使用拖拽位置
-  if (props.isDraggable) {
-    baseStyle.transform = `translate(${position.value.x}px, ${position.value.y}px)`
-    baseStyle.zIndex = isDragging.value ? 9999 : (props.isSelected ? 1000 : props.index + 100)
-    baseStyle.position = 'fixed'
-    return baseStyle
-  }
-  
-  // 原有的扇形排布逻辑
   if (props.isCollapsed) {
     return {
       transform: `translateX(${props.index * 15}px)`,
@@ -128,12 +91,12 @@ const cardStyle = computed(() => {
   }
 })
 
-const handleCardClick = (event: MouseEvent) => {
-  // 如果正在拖拽，不触发选择事件
-  if (isDragging.value) {
-    return
-  }
+const handleCardClick = () => {
   emit('select', props.card.id)
+}
+
+const handleCardDoubleClick = () => {
+  emit('reply', props.card)
 }
 
 const formatTime = (date: Date) => {
@@ -142,15 +105,6 @@ const formatTime = (date: Date) => {
     minute: '2-digit' 
   })
 }
-
-// 监听拖拽状态变化
-watch(isDragging, (newValue, oldValue) => {
-  if (newValue && !oldValue) {
-    emit('dragStart', props.card.id)
-  } else if (!newValue && oldValue) {
-    emit('dragEnd', props.card.id, position.value)
-  }
-})
 </script>
 
 <style scoped>
@@ -172,14 +126,9 @@ watch(isDragging, (newValue, oldValue) => {
   height: 80px;
 }
 
-.playing-card.user-card {
-  background: linear-gradient(145deg, #e3f2fd, #bbdefb);
-  border-color: #2196f3;
-}
-
-.playing-card.assistant-card {
-  background: linear-gradient(145deg, #f3e5f5, #e1bee7);
-  border-color: #9c27b0;
+.playing-card.summary-card {
+  background: linear-gradient(145deg, #fff3e0, #ffcc80);
+  border-color: #ff9800;
 }
 
 .playing-card:hover {
@@ -191,7 +140,7 @@ watch(isDragging, (newValue, oldValue) => {
 .playing-card.selected {
   transform: translateY(-20px) scale(1.1);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
-  border-color: #ff9800;
+  border-color: #050505;
   background: linear-gradient(145deg, #fff3e0, #ffe0b2);
 }
 
@@ -256,38 +205,26 @@ watch(isDragging, (newValue, oldValue) => {
   font-size: 6px;
 }
 
-.drag-handle {
-  cursor: grab;
-  padding: 2px;
+.card-type {
+  font-size: 14px;
 }
 
-.drag-handle:active {
-  cursor: grabbing;
+.collapsed .card-type {
+  font-size: 12px;
 }
 
-.drag-dots {
-  width: 12px;
-  height: 8px;
-  background-image: 
-    radial-gradient(circle, #999 1px, transparent 1px),
-    radial-gradient(circle, #999 1px, transparent 1px);
-  background-size: 4px 4px;
-  background-position: 0 0, 0 4px;
+.card-range {
+  margin: 2px 0 0 0;
+  font-size: 7px;
+  color: #666;
+  font-style: italic;
 }
 
-.playing-card.dragging {
-  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
-  transform: scale(1.05);
-  z-index: 9999 !important;
+.collapsed .card-range {
+  font-size: 6px;
 }
 
-.playing-card.draggable {
-  cursor: grab;
-}
 
-.playing-card.draggable:active {
-  cursor: grabbing;
-}
 
 /* 动画效果 */
 @keyframes cardAppear {

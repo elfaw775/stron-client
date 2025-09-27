@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full w-full bg-background ">
+  <div class="flex flex-col h-full w-full bg-background">
     <!-- Chat Header -->
     <ChatHeader @toggle-sidebar="$emit('toggleSidebar')" />
     
@@ -51,12 +51,14 @@
       </div>
     </div>
     
-    <!-- 扑克牌组件 -->
+    <!-- 扑克牌组件作为聊天footer -->
     <CardDeck 
       :cards="cards"
       @reply-to-card="handleReplyToCard"
       @copy-card="handleCopyCard"
     />
+    
+   
   </div>
 </template>
 
@@ -77,24 +79,41 @@ defineEmits<{
 
 const { currentConversation, currentConversationId } = useConversations()
 const { isStreaming, canSendMessage, sendStreamMessage, abortStream } = useStreamChat()
-const { cards, addCard, initializeFromMessages } = useCardDeck()
+const { cards, addMessage, initializeFromMessages, generateCurrentSummary, messageBuffer } = useCardDeck()
+
+const isDev = true // 开发模式
 
 // 监听当前对话变化，初始化扑克牌
-watch(currentConversation, (newConversation) => {
+watch(currentConversation, async (newConversation) => {
   if (newConversation) {
-    initializeFromMessages(newConversation.messages)
+    await initializeFromMessages(newConversation.messages)
   }
 }, { immediate: true })
 
-// 监听消息变化，添加新的扑克牌
-watch(() => currentConversation.value?.messages, (newMessages, oldMessages) => {
-  if (newMessages && oldMessages && newMessages.length > oldMessages.length) {
-    const newMessage = newMessages[newMessages.length - 1]
-    if (newMessage.sender === 'user') {
-      addCard(newMessage)
+// 监听消息变化，添加新消息到缓存
+let lastMessageCount = 0
+
+watch(() => currentConversation.value?.messages, (newMessages) => {
+  console.log('消息变化检测:', {
+    newLength: newMessages?.length,
+    lastCount: lastMessageCount,
+    hasNew: newMessages && newMessages.length > lastMessageCount
+  })
+  
+  if (newMessages && newMessages.length > lastMessageCount) {
+    console.log("检测到新消息")
+    // 处理所有新增的消息
+    for (let i = lastMessageCount; i < newMessages.length; i++) {
+      const newMessage = newMessages[i]
+      console.log('新消息内容:', newMessage)
+      addMessage(newMessage)
     }
+    lastMessageCount = newMessages.length
+  } else if (newMessages) {
+    // 更新计数器，但不处理消息（可能是初始化）
+    lastMessageCount = newMessages.length
   }
-}, { deep: true })
+}, { deep: true, immediate: true })       
 
 const suggestions = ref([
   {
@@ -135,14 +154,22 @@ const handleSuggestionClick = (prompt: string) => {
   handleSendMessage(prompt)
 }
 
+// 处理卡片回复 - 点击卡片将内容添加到对话中
 const handleReplyToCard = (card: any) => {
-  // 将选中的卡片内容填入输入框或作为上下文
-  console.log('Reply to card:', card)
-  // 这里可以实现回复逻辑，比如在输入框中预填充 "关于 '${card.content}' 的问题..."
+  if (!currentConversationId.value) return
+  
+  // 构建回复内容，基于总结卡片
+  const replyContent = `请基于以下对话总结进行详细说明：\n"${card.content}"\n\n请展开解释相关内容。`
+  
+  // 直接发送消息
+
+  handleSendMessage(replyContent)
 }
 
+// 处理卡片复制
 const handleCopyCard = (content: string) => {
   console.log('Copied:', content)
   // 可以显示复制成功的提示
+  // 这里可以添加toast通知
 }
 </script>

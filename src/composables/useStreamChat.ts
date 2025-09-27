@@ -1,16 +1,13 @@
 import { ref, computed } from 'vue'
-import { chatAPI, type ChatRequest, type StreamChunk } from '@/api/chat'
-import { SSEClient } from '@/utils/sse'
+import { moonshotAPI, type MoonshotMessage } from '@/api/moonshot'
 import { useConversations } from './useConversations'
-import type { Message } from '@/types/conversation'
 
 export function useStreamChat() {
-  const { currentConversationId, addMessage, updateLastMessage } = useConversations()
+  const { currentConversationId, addMessage, updateLastMessage, currentConversation } = useConversations()
   
   const isStreaming = ref(false)
   const streamingMessageId = ref<string | null>(null)
   const currentStreamContent = ref('')
-  const sseClient = ref<SSEClient | null>(null)
 
   const canSendMessage = computed(() => !isStreaming.value)
 
@@ -25,29 +22,38 @@ export function useStreamChat() {
       sender: 'user'
     })
 
-    // 获取当前对话的所有消息作为上下文
-    const { currentConversation } = useConversations()
-    const contextMessages = currentConversation.value?.messages.map(msg => ({
-      role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
-      content: msg.content,
-      timestamp: msg.timestamp.toISOString()
-    })) || []
+    // 准备消息历史
+    const messages: MoonshotMessage[] = []
+    
+    // 添加系统提示
+    messages.push({
+      role: 'system',
+      content: '你是 Kimi，由 Moonshot AI 提供的人工智能助手，你更擅长中文和英文的对话。你会为用户提供安全，有帮助，准确的回答。同时，你会拒绝一切涉及恐怖主义，种族歧视，黄色暴力等问题的回答。'
+    })
 
-    // 准备请求数据
-    const request: ChatRequest = {
-      messages: [
-        ...contextMessages,
-        {
-          role: 'user',
-          content,
-          timestamp: new Date().toISOString()
+    // 添加对话历史（除了刚刚添加的用户消息）
+    if (currentConversation.value?.messages) {
+      const historyMessages = currentConversation.value.messages.slice(0, -1) // 排除刚添加的消息
+      for (const msg of historyMessages) {
+        if (msg.sender === 'user') {
+          messages.push({
+            role: 'user',
+            content: msg.content
+          })
+        } else if (msg.sender === 'assistant') {
+          messages.push({
+            role: 'assistant',
+            content: msg.content
+          })
         }
-      ],
-      conversationId: currentConversationId.value,
-      stream: true,
-      temperature: 0.7,
-      maxTokens: 2000
+      }
     }
+
+    // 添加当前用户消息
+    messages.push({
+      role: 'user',
+      content
+    })
 
     isStreaming.value = true
     currentStreamContent.value = ''
@@ -62,29 +68,30 @@ export function useStreamChat() {
     })
 
     try {
-      sseClient.value = chatAPI.streamMessage(
-        request,
-        handleStreamChunk,
-        handleStreamError,
-        handleStreamComplete
-      )
+      // 使用Moonshot API进行流式对话
+      const stream = moonshotAPI.streamChat(messages, {
+        temperature: 0.7,
+        maxTokens: 2000
+      })
+
+      for await (const chunk of stream) {
+        if (chunk.choices && chunk.choices[0]?.delta?.content) {
+          currentStreamContent.value += chunk.choices[0].delta.content
+          
+          // 更新当前对话中的最后一条消息
+          if (currentConversationId.value) {
+            updateLastMessage(currentConversationId.value, currentStreamContent.value)
+          }
+        }
+
+        // 检查是否完成
+        if (chunk.choices && chunk.choices[0]?.finish_reason) {
+          handleStreamComplete()
+          break
+        }
+      }
     } catch (error) {
       handleStreamError(error as Error)
-    }
-  }
-
-  const handleStreamChunk = (chunk: StreamChunk) => {
-    if (chunk.delta.content) {
-      currentStreamContent.value += chunk.delta.content
-      
-      // 更新当前对话中的最后一条消息
-      if (currentConversationId.value && streamingMessageId.value) {
-        updateLastMessage(currentConversationId.value, currentStreamContent.value)
-      }
-    }
-
-    if (chunk.finished) {
-      handleStreamComplete()
     }
   }
 
@@ -92,10 +99,14 @@ export function useStreamChat() {
     console.error('Stream error:', error)
     
     // 更新消息显示错误
-    if (currentConversationId.value && streamingMessageId.value) {
+    if (currentConversationId.value) {
+      const errorMessage = error.message.includes('API key') 
+        ? 'API密钥配置错误，请检查环境变量配置'
+        : `抱歉，处理您的请求时出现错误: ${error.message}`
+      
       updateLastMessage(
         currentConversationId.value, 
-        currentStreamContent.value || 'Sorry, there was an error processing your request.'
+        currentStreamContent.value || errorMessage
       )
     }
     
@@ -111,17 +122,11 @@ export function useStreamChat() {
     isStreaming.value = false
     streamingMessageId.value = null
     currentStreamContent.value = ''
-    
-    if (sseClient.value) {
-      sseClient.value.close()
-      sseClient.value = null
-    }
   }
 
   const abortStream = () => {
-    if (sseClient.value) {
-      sseClient.value.close()
-    }
+    // 对于fetch stream，我们可以通过AbortController来中断
+    // 这里先简单停止流状态
     stopStreaming()
   }
 

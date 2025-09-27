@@ -1,38 +1,18 @@
 <template>
   <div :class="deckClasses">
-    <!-- 控制按钮组 -->
-    <div class="control-buttons">
-      <button 
-        @click="toggleCollapse"
-        class="toggle-button"
-        :class="{ 'collapsed': isCollapsed }"
-      >
-        <ChevronUp v-if="!isCollapsed" class="w-4 h-4" />
-        <ChevronDown v-else class="w-4 h-4" />
-        <span class="card-count">{{ cards.length }}</span>
-      </button>
-      
-      <button 
-        @click="toggleDraggable"
-        class="drag-toggle-button"
-        :class="{ 'active': isDeckDraggable }"
-        title="切换拖拽模式"
-      >
-        <Move class="w-4 h-4" />
-      </button>
-      
-      <button 
-        v-if="isDeckDraggable"
-        @click="resetAllPositions"
-        class="reset-button"
-        title="重置位置"
-      >
-        <RotateCcw class="w-4 h-4" />
-      </button>
-    </div>
+    <!-- 折叠/展开按钮 -->
+    <button v-if="displayCards.length > 0"                           
+      @click="toggleCollapse"
+      class="toggle-button"
+      :class="{ 'collapsed': isCollapsed }"
+    >
+      <ChevronUp v-if="!isCollapsed" class="w-4 h-4" />
+      <ChevronDown v-else class="w-4 h-4" />
+      <span class="card-count">{{ displayCards.length }}</span>  
+    </button>
 
     <!-- 扑克牌容器 -->
-    <div class="cards-container" v-if="!isCollapsed || cards.length > 0">
+    <div class="cards-container" v-if="!isCollapsed">
       <PlayingCard
         v-for="(card, index) in displayCards"
         :key="card.id"
@@ -41,11 +21,8 @@
         :total-cards="displayCards.length"
         :is-selected="selectedCardId === card.id"
         :is-collapsed="isCollapsed"
-        :is-draggable="isDeckDraggable"
-        :drag-position="draggedCards.get(card.id)"
         @select="handleCardSelect"
-        @drag-start="handleDragStart"
-        @drag-end="handleDragEnd"
+        @reply="handleCardReply"
       />
     </div>
 
@@ -80,13 +57,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import PlayingCard from './PlayingCard.vue'
-import { ChevronUp, ChevronDown, X, Copy, Reply, Move, RotateCcw } from 'lucide-vue-next'
+import { ChevronUp, ChevronDown, X, Copy, Reply } from 'lucide-vue-next'
 
 interface Card {
   id: string
   content: string
   timestamp: Date
-  sender: 'user' | 'assistant'
+  sender: 'summary'
+  messageRange?: string
+  originalMessages?: any[]
 }
 
 const props = defineProps<{
@@ -98,16 +77,12 @@ const emit = defineEmits<{
   copyCard: [content: string]
 }>()
 
-// 拖拽状态管理
-const draggedCards = ref<Map<string, { x: number; y: number }>>(new Map())
-const isDeckDraggable = ref(false)
-
-const isCollapsed = ref(false)
+const isCollapsed = ref(true) // 默认折叠
 const selectedCardId = ref<string | null>(null)
 
 const displayCards = computed(() => {
-  // 只显示用户发送的消息作为扑克牌
-  return props.cards.filter(card => card.sender === 'user')
+  // 显示所有总结卡片
+  return props.cards.filter(card => card.sender === 'summary')
 })
 
 const selectedCard = computed(() => {
@@ -115,7 +90,7 @@ const selectedCard = computed(() => {
 })
 
 const deckClasses = computed(() => [
-  'card-deck',
+  'card-deck-footer',
   {
     'collapsed': isCollapsed.value,
     'has-cards': displayCards.value.length > 0,
@@ -160,6 +135,11 @@ const replyToCard = () => {
   }
 }
 
+// 处理卡片双击回复
+const handleCardReply = (card: Card) => {
+  emit('replyToCard', card)
+}
+
 const formatDetailTime = (date: Date) => {
   return date.toLocaleString('zh-CN', {
     month: 'short',
@@ -169,128 +149,62 @@ const formatDetailTime = (date: Date) => {
   })
 }
 
-// 拖拽相关方法
-const handleDragStart = (cardId: string) => {
-  console.log('Drag started for card:', cardId)
-}
-
-const handleDragEnd = (cardId: string, position: { x: number; y: number }) => {
-  draggedCards.value.set(cardId, position)
-  console.log('Drag ended for card:', cardId, 'at position:', position)
-}
-
-const toggleDraggable = () => {
-  isDeckDraggable.value = !isDeckDraggable.value
-  if (!isDeckDraggable.value) {
-    // 重置所有卡片位置
-    draggedCards.value.clear()
-  }
-}
-
-const resetAllPositions = () => {
-  draggedCards.value.clear()
-}
-
 // 暴露方法给父组件
 defineExpose({
-  addCard: (card: Card) => {
-    // 新卡片添加动画会自动触发
-  },
   collapse: () => {
     isCollapsed.value = true
     selectedCardId.value = null
   },
   expand: () => {
     isCollapsed.value = false
-  },
-  toggleDraggable,
-  resetAllPositions
+  }
 })
 </script>
 
 <style scoped>
-.card-deck {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+.card-deck-footer {
+  position: relative;
   width: 100%;
-  max-width: 800px;
-  height: 200px;
-  pointer-events: none;
-  z-index: 100;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
 }
 
-.card-deck.collapsed {
+.card-deck-footer.collapsed {
   height: 60px;
 }
 
-.card-deck.has-selection {
+.card-deck-footer:not(.collapsed) {
+  height: 200px;
+}
+
+.card-deck-footer.has-selection:not(.collapsed) {
   height: 300px;
 }
 
-.control-buttons {
+.toggle-button {
   position: absolute;
-  top: -40px;
+  top: -35px;
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
-  gap: 4px;
-  pointer-events: auto;
-}
-
-.toggle-button {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #ddd;
-  border-radius: 20px 20px 0 0;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
   padding: 8px 16px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   cursor: pointer;
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .toggle-button:hover {
   background: rgba(255, 255, 255, 1);
-  transform: translateY(-2px);
-}
-
-.toggle-button.collapsed {
-  border-radius: 20px;
-}
-
-.drag-toggle-button,
-.reset-button {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #ddd;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-}
-
-.drag-toggle-button:hover,
-.reset-button:hover {
-  background: rgba(255, 255, 255, 1);
-  transform: translateY(-2px);
-}
-
-.drag-toggle-button.active {
-  background: rgba(59, 130, 246, 0.9);
-  border-color: #3b82f6;
-  color: white;
-}
-
-.drag-toggle-button.active:hover {
-  background: rgba(59, 130, 246, 1);
+  transform: translateX(-50%) translateY(-2px);
 }
 
 .card-count {
@@ -299,6 +213,9 @@ defineExpose({
   color: #666;
   min-width: 16px;
   text-align: center;
+  background: #f0f0f0;
+  border-radius: 10px;
+  padding: 2px 6px;
 }
 
 .cards-container {
@@ -308,12 +225,13 @@ defineExpose({
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  pointer-events: auto;
+  padding: 20px;
+  overflow: hidden;
 }
 
 .card-detail {
   position: absolute;
-  bottom: 140px;
+  bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   background: white;
@@ -323,8 +241,8 @@ defineExpose({
   max-width: 400px;
   width: 90%;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  pointer-events: auto;
   animation: detailAppear 0.3s ease-out;
+  margin-bottom: 10px;
 }
 
 @keyframes detailAppear {
@@ -364,6 +282,7 @@ defineExpose({
   padding: 4px;
   border-radius: 4px;
   color: #666;
+  transition: all 0.2s ease;
 }
 
 .close-button:hover {
@@ -406,13 +325,20 @@ defineExpose({
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .card-deck {
-    max-width: 100%;
-    padding: 0 16px;
+  .card-deck-footer:not(.collapsed) {
+    height: 180px;
+  }
+  
+  .card-deck-footer.has-selection:not(.collapsed) {
+    height: 280px;
+  }
+  
+  .cards-container {
+    padding: 15px;
   }
   
   .card-detail {
-    width: calc(100% - 32px);
+    width: calc(100% - 20px);
     max-width: none;
   }
 }

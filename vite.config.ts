@@ -10,4 +10,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/api/moonshot': {
+        target: 'https://api.moonshot.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/moonshot/, ''),
+        headers: {
+          'Origin': 'https://api.moonshot.cn'
+        }
+      }
+    }
+  }
 })
