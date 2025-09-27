@@ -89,6 +89,31 @@ export function useConversations() {
       if (conversation.title === 'New Conversation' && message.sender === 'user') {
         conversation.title = message.content.slice(0, 30) + (message.content.length > 30 ? '...' : '')
       }
+      
+      return newMessage.id
+    }
+    return null
+  }
+
+  const updateLastMessage = (conversationId: string, content: string) => {
+    const conversation = conversations.value.find(c => c.id === conversationId)
+    if (conversation && conversation.messages.length > 0) {
+      const lastMessage = conversation.messages[conversation.messages.length - 1]
+      lastMessage.content = content
+      conversation.lastMessage = content
+      conversation.updatedAt = new Date()
+    }
+  }
+
+  const updateMessageById = (conversationId: string, messageId: string, content: string) => {
+    const conversation = conversations.value.find(c => c.id === conversationId)
+    if (conversation) {
+      const message = conversation.messages.find(m => m.id === messageId)
+      if (message) {
+        message.content = content
+        conversation.lastMessage = content
+        conversation.updatedAt = new Date()
+      }
     }
   }
 
@@ -109,6 +134,8 @@ export function useConversations() {
     createNewConversation,
     selectConversation,
     addMessage,
+    updateLastMessage,
+    updateMessageById,
     deleteConversation
   }
 }
