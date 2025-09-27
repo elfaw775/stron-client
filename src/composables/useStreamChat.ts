@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { chatAPI, type ChatRequest, type StreamChunk } from '@/api/chat'
 import { SSEClient } from '@/utils/sse'
 import { useConversations } from './useConversations'
+import type { Message } from '@/types/conversation'
 
 export function useStreamChat() {
   const { currentConversationId, addMessage, updateLastMessage } = useConversations()
@@ -24,9 +25,18 @@ export function useStreamChat() {
       sender: 'user'
     })
 
+    // 获取当前对话的所有消息作为上下文
+    const { currentConversation } = useConversations()
+    const contextMessages = currentConversation.value?.messages.map(msg => ({
+      role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
+      content: msg.content,
+      timestamp: msg.timestamp.toISOString()
+    })) || []
+
     // 准备请求数据
     const request: ChatRequest = {
       messages: [
+        ...contextMessages,
         {
           role: 'user',
           content,

@@ -43,7 +43,11 @@
     <!-- Input Area -->
     <div class="border-t border-border bg-background w-full">
       <div class="max-w-3xl lg:max-w-none mx-auto px-4 lg:px-8 xl:px-16 2xl:px-24 py-4 w-full">
-        <ChatInput @send-message="handleSendMessage" />
+        <ChatInput 
+          :is-streaming="isStreaming"
+          @send-message="handleSendMessage" 
+          @abort-stream="abortStream"
+        />
       </div>
     </div>
   </div>
@@ -56,12 +60,14 @@ import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
 import { MessageCircle } from 'lucide-vue-next'
 import { useConversations } from '@/composables/useConversations'
+import { useStreamChat } from '@/composables/useStreamChat'
 
 defineEmits<{
   toggleSidebar: []
 }>()
 
-const { currentConversation, currentConversationId, addMessage } = useConversations()
+const { currentConversation, currentConversationId } = useConversations()
+const { isStreaming, canSendMessage, sendStreamMessage, abortStream } = useStreamChat()
 
 const suggestions = ref([
   {
@@ -86,22 +92,15 @@ const suggestions = ref([
   }
 ])
 
-const handleSendMessage = (content: string) => {
-  if (currentConversationId.value) {
-    addMessage(currentConversationId.value, {
-      content,
-      sender: 'user'
-    })
-    
-    // Simulate assistant response
-    setTimeout(() => {
-      if (currentConversationId.value) {
-        addMessage(currentConversationId.value, {
-          content: 'I understand your question. Let me help you with that. This is a detailed response that shows how the assistant would typically respond to user queries with helpful and informative content.',
-          sender: 'assistant'
-        })
-      }
-    }, 1000)
+const handleSendMessage = async (content: string) => {
+  if (!canSendMessage.value || !currentConversationId.value) {
+    return
+  }
+
+  try {
+    await sendStreamMessage(content)
+  } catch (error) {
+    console.error('Failed to send message:', error)
   }
 }
 
