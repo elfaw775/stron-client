@@ -50,17 +50,26 @@
         />
       </div>
     </div>
+    
+    <!-- 扑克牌组件 -->
+    <CardDeck 
+      :cards="cards"
+      @reply-to-card="handleReplyToCard"
+      @copy-card="handleCopyCard"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import ChatHeader from './ChatHeader.vue'
 import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
+import CardDeck from '@/components/cards/CardDeck.vue'
 import { MessageCircle } from 'lucide-vue-next'
 import { useConversations } from '@/composables/useConversations'
 import { useStreamChat } from '@/composables/useStreamChat'
+import { useCardDeck } from '@/composables/useCardDeck'
 
 defineEmits<{
   toggleSidebar: []
@@ -68,6 +77,24 @@ defineEmits<{
 
 const { currentConversation, currentConversationId } = useConversations()
 const { isStreaming, canSendMessage, sendStreamMessage, abortStream } = useStreamChat()
+const { cards, addCard, initializeFromMessages } = useCardDeck()
+
+// 监听当前对话变化，初始化扑克牌
+watch(currentConversation, (newConversation) => {
+  if (newConversation) {
+    initializeFromMessages(newConversation.messages)
+  }
+}, { immediate: true })
+
+// 监听消息变化，添加新的扑克牌
+watch(() => currentConversation.value?.messages, (newMessages, oldMessages) => {
+  if (newMessages && oldMessages && newMessages.length > oldMessages.length) {
+    const newMessage = newMessages[newMessages.length - 1]
+    if (newMessage.sender === 'user') {
+      addCard(newMessage)
+    }
+  }
+}, { deep: true })
 
 const suggestions = ref([
   {
@@ -106,5 +133,16 @@ const handleSendMessage = async (content: string) => {
 
 const handleSuggestionClick = (prompt: string) => {
   handleSendMessage(prompt)
+}
+
+const handleReplyToCard = (card: any) => {
+  // 将选中的卡片内容填入输入框或作为上下文
+  console.log('Reply to card:', card)
+  // 这里可以实现回复逻辑，比如在输入框中预填充 "关于 '${card.content}' 的问题..."
+}
+
+const handleCopyCard = (content: string) => {
+  console.log('Copied:', content)
+  // 可以显示复制成功的提示
 }
 </script>
