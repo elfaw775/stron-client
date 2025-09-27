@@ -24,11 +24,24 @@ interface Star {
   isAffected: boolean
 }
 
+interface Meteor {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  length: number
+  opacity: number
+  life: number
+  maxLife: number
+  color: string
+}
+
 const starFieldRef = ref<HTMLElement>()
 const canvasRef = ref<HTMLCanvasElement>()
 
 let animationId: number
 let stars: Star[] = []
+let meteors: Meteor[] = []
 let canvas: HTMLCanvasElement
 let ctx: CanvasRenderingContext2D
 let width = 0
@@ -36,12 +49,14 @@ let height = 0
 let mouseX = 0
 let mouseY = 0
 let isMouseInside = false
+let lastMeteorTime = 0
 
 const STAR_COUNT = 200
-const MOUSE_RADIUS = 120
-const REPULSION_FORCE = 0.3
-const RETURN_FORCE = 0.01
-const FRICTION = 0.80
+const MOUSE_RADIUS = 500
+const REPULSION_FORCE = 0.5
+const RETURN_FORCE = 0.05
+const FRICTION = 0.95
+const METEOR_INTERVAL = 1000 // 每1000毫秒（1秒）生成一颗流星
 
 const initCanvas = () => {
   canvas = canvasRef.value!
@@ -78,6 +93,57 @@ const createStars = () => {
       isAffected: false
     })
   }
+}
+
+const createMeteor = () => {
+  const colors = ['#ffffff', '#ffddaa', '#aaddff', '#ddaaff']
+  const side = Math.floor(Math.random() * 4) // 0: top, 1: right, 2: bottom, 3: left
+  let x, y, vx, vy
+  
+  switch (side) {
+    case 0: // 从顶部进入
+      x = Math.random() * width
+      y = -50
+      vx = (Math.random() - 0.5) * 4
+      vy = Math.random() * 3 + 2
+      break
+    case 1: // 从右侧进入
+      x = width + 50
+      y = Math.random() * height
+      vx = -(Math.random() * 3 + 2)
+      vy = (Math.random() - 0.5) * 4
+      break
+    case 2: // 从底部进入
+      x = Math.random() * width
+      y = height + 50
+      vx = (Math.random() - 0.5) * 4
+      vy = -(Math.random() * 3 + 2)
+      break
+    case 3: // 从左侧进入
+      x = -50
+      y = Math.random() * height
+      vx = Math.random() * 3 + 2
+      vy = (Math.random() - 0.5) * 4
+      break
+    default:
+      x = Math.random() * width
+      y = -50
+      vx = (Math.random() - 0.5) * 4
+      vy = Math.random() * 3 + 2
+  }
+  
+  const maxLife = Math.random() * 100 + 50
+  meteors.push({
+    x,
+    y,
+    vx,
+    vy,
+    length: Math.random() * 30 + 20,
+    opacity: 1,
+    life: maxLife,
+    maxLife,
+    color: colors[Math.floor(Math.random() * colors.length)]
+  })
 }
 
 const handleMouseMove = (event: MouseEvent) => {
@@ -134,6 +200,35 @@ const updateStars = () => {
   }
 }
 
+const updateMeteors = () => {
+  // 生成新流星
+  const currentTime = Date.now()
+  if (currentTime - lastMeteorTime > METEOR_INTERVAL) {
+    createMeteor()
+    lastMeteorTime = currentTime
+  }
+  
+  // 更新现有流星
+  for (let i = meteors.length - 1; i >= 0; i--) {
+    const meteor = meteors[i]
+    
+    // 更新位置
+    meteor.x += meteor.vx
+    meteor.y += meteor.vy
+    
+    // 更新生命值和透明度
+    meteor.life--
+    meteor.opacity = meteor.life / meteor.maxLife
+    
+    // 移除死亡或超出边界的流星
+    if (meteor.life <= 0 || 
+        meteor.x < -100 || meteor.x > width + 100 ||
+        meteor.y < -100 || meteor.y > height + 100) {
+      meteors.splice(i, 1)
+    }
+  }
+}
+
 const drawStars = () => {
   // 清除画布
   ctx.fillStyle = 'rgba(0, 0, 0, 1)'
@@ -169,9 +264,54 @@ const drawStars = () => {
   }
 }
 
+const drawMeteors = () => {
+  for (let meteor of meteors) {
+    // 计算流星尾巴的起点
+    const tailX = meteor.x - meteor.vx * meteor.length / 10
+    const tailY = meteor.y - meteor.vy * meteor.length / 10
+    
+    // 解析颜色
+    const r = parseInt(meteor.color.slice(1, 3), 16)
+    const g = parseInt(meteor.color.slice(3, 5), 16)
+    const b = parseInt(meteor.color.slice(5, 7), 16)
+    
+    // 创建渐变效果
+    const gradient = ctx.createLinearGradient(tailX, tailY, meteor.x, meteor.y)
+    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`)
+    gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${meteor.opacity})`)
+    
+    // 绘制流星轨迹
+    ctx.strokeStyle = gradient
+    ctx.lineWidth = 3
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(tailX, tailY)
+    ctx.lineTo(meteor.x, meteor.y)
+    ctx.stroke()
+    
+    // 绘制流星头部光点
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${meteor.opacity})`
+    ctx.beginPath()
+    ctx.arc(meteor.x, meteor.y, 2, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // 绘制流星光晕
+    const glowGradient = ctx.createRadialGradient(meteor.x, meteor.y, 0, meteor.x, meteor.y, 8)
+    glowGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${meteor.opacity * 0.4})`)
+    glowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    
+    ctx.fillStyle = glowGradient
+    ctx.beginPath()
+    ctx.arc(meteor.x, meteor.y, 8, 0, Math.PI * 2)
+    ctx.fill()
+  }
+}
+
 const animate = () => {
   updateStars()
+  updateMeteors()
   drawStars()
+  drawMeteors()
   animationId = requestAnimationFrame(animate)
 }
 

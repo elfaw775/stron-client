@@ -6,7 +6,6 @@
         @click="$emit('toggleSidebar')" 
         variant="ghost" 
         size="icon"
-        class="lg:hidden"
       >
         <Menu class="h-5 w-5" />
       </Button>

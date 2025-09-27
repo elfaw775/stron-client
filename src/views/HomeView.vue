@@ -6,11 +6,8 @@
       <div class="hero-section">
         <div class="hero-content">
           <h1 class="hero-title">
-            <span class="gradient-text">AI Assistant</span>
+            <span class="gradient-text">chat to me</span>
           </h1>
-          <p class="hero-subtitle">
-            Your intelligent companion for coding, learning, and problem-solving
-          </p>
           
           <div class="hero-actions">
             <Button 
@@ -21,40 +18,6 @@
               <MessageCircle class="w-5 h-5 mr-2" />
               Start Chatting
             </Button>
-            <Button 
-              variant="outline" 
-              size="lg"
-              class="learn-more-btn"
-            >
-              <Sparkles class="w-5 h-5 mr-2" />
-              Learn More
-            </Button>
-          </div>
-        </div>
-        
-        <div class="hero-features">
-          <div class="feature-card">
-            <div class="feature-icon">
-              <Code class="w-8 h-8" />
-            </div>
-            <h3>Code Assistant</h3>
-            <p>Get help with programming, debugging, and code reviews</p>
-          </div>
-          
-          <div class="feature-card">
-            <div class="feature-icon">
-              <Brain class="w-8 h-8" />
-            </div>
-            <h3>Smart Learning</h3>
-            <p>Learn new concepts with personalized explanations</p>
-          </div>
-          
-          <div class="feature-card">
-            <div class="feature-icon">
-              <Zap class="w-8 h-8" />
-            </div>
-            <h3>Instant Answers</h3>
-            <p>Get quick solutions to your technical questions</p>
           </div>
         </div>
       </div>

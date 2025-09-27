@@ -1,7 +1,7 @@
 <template>
   <div :class="deckClasses">
     <!-- 折叠/展开按钮 -->
-    <button v-if="displayCards.length > 0"                           
+    <button                          
       @click="toggleCollapse"
       class="toggle-button"
       :class="{ 'collapsed': isCollapsed }"
