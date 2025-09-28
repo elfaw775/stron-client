@@ -4,10 +4,11 @@ import { useConversations } from './useConversations'
 
 export function useStreamChat() {
   const { currentConversationId, addMessage, updateLastMessage, currentConversation } = useConversations()
-  
+
   const isStreaming = ref(false)
   const streamingMessageId = ref<string | null>(null)
   const currentStreamContent = ref('')
+  const abortController = ref<AbortController | null>(null)
 
   const canSendMessage = computed(() => !isStreaming.value)
 
@@ -24,7 +25,7 @@ export function useStreamChat() {
 
     // 准备消息历史
     const messages: MoonshotMessage[] = []
-    
+
     // 添加系统提示
     messages.push({
       role: 'system',
@@ -58,26 +59,30 @@ export function useStreamChat() {
     isStreaming.value = true
     currentStreamContent.value = ''
     
+    // 创建新的AbortController
+    abortController.value = new AbortController()
+
     // 添加一个空的助手消息作为占位符
     const assistantMessageId = Date.now().toString()
     streamingMessageId.value = assistantMessageId
-    
+
     addMessage(currentConversationId.value, {
       content: '',
       sender: 'assistant'
     })
 
     try {
-      // 使用Moonshot API进行流式对话
+      // 使用Moonshot API进行流式对话，传入abort信号
       const stream = moonshotAPI.streamChat(messages, {
         temperature: 0.7,
-        maxTokens: 2000
+        maxTokens: 2000,
+        signal: abortController.value.signal
       })
 
       for await (const chunk of stream) {
         if (chunk.choices && chunk.choices[0]?.delta?.content) {
           currentStreamContent.value += chunk.choices[0].delta.content
-          
+
           // 更新当前对话中的最后一条消息
           if (currentConversationId.value) {
             updateLastMessage(currentConversationId.value, currentStreamContent.value)
@@ -96,20 +101,30 @@ export function useStreamChat() {
   }
 
   const handleStreamError = (error: Error) => {
-    console.error('Stream error:', error)
-    
-    // 更新消息显示错误
-    if (currentConversationId.value) {
-      const errorMessage = error.message.includes('API key') 
-        ? 'API密钥配置错误，请检查环境变量配置'
-        : `抱歉，处理您的请求时出现错误: ${error.message}`
-      
-      updateLastMessage(
-        currentConversationId.value, 
-        currentStreamContent.value || errorMessage
-      )
+    if (error.name === 'AbortError') {
+      console.log('Stream aborted by user',currentStreamContent.value)
+      // 如果是用户主动中止，显示中止消息
+      // if (currentConversationId.value) {
+      //   updateLastMessage(
+      //     currentConversationId.value,
+      //     currentStreamContent.value || ''
+      //   )
+      // }
+    } else {
+      console.error('Stream error:', error)
+      // 更新消息显示错误
+      if (currentConversationId.value) {
+        const errorMessage = error.message.includes('API key')
+          ? 'API密钥配置错误，请检查环境变量配置'
+          : `抱歉，处理您的请求时出现错误: ${error.message}`
+
+        updateLastMessage(
+          currentConversationId.value,
+          currentStreamContent.value || errorMessage
+        )
+      }
     }
-    
+
     stopStreaming()
   }
 
@@ -122,11 +137,18 @@ export function useStreamChat() {
     isStreaming.value = false
     streamingMessageId.value = null
     currentStreamContent.value = ''
+    abortController.value = null
   }
 
   const abortStream = () => {
-    // 对于fetch stream，我们可以通过AbortController来中断
-    // 这里先简单停止流状态
+    console.log('Aborting stream...')
+    
+    // 如果有正在进行的请求，中止它
+    if (abortController.value) {
+      abortController.value.abort()
+    }
+    
+    // 立即停止流状态
     stopStreaming()
   }
 

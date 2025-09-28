@@ -29,7 +29,7 @@
     <!-- User Message -->
     <div v-else class="flex justify-end">
       <div class="max-w-[70%] bg-primary text-primary-foreground rounded-2xl px-4 py-3">
-        <MarkdownRenderer :content="message.content" class="text-sm leading-relaxed text-primary-foreground" />
+        <div class="text-sm leading-relaxed text-primary-foreground whitespace-pre-wrap">{{ message.content }}</div>
       </div>
     </div>
   </div>

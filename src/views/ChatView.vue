@@ -1,6 +1,7 @@
 <template>
   <!-- Mobile Layout -->
   <div class="lg:hidden flex flex-col h-screen bg-background">
+    <StarField />
     <ChatContainer @toggle-sidebar="sidebarOpen = !sidebarOpen" />
     
     <!-- Mobile Sidebar Overlay -->

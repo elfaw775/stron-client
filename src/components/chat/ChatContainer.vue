@@ -44,6 +44,7 @@
     <div class="border-t border-border bg-background w-full">
       <div class="max-w-3xl lg:max-w-none mx-auto px-4 lg:px-8 xl:px-16 2xl:px-24 py-4 w-full">
         <ChatInput 
+          ref="chatInputRef"
           :is-streaming="isStreaming"
           @send-message="handleSendMessage" 
           @abort-stream="abortStream"
@@ -56,6 +57,7 @@
       :cards="cards"
       @reply-to-card="handleReplyToCard"
       @copy-card="handleCopyCard"
+      @drag-to-input="handleDragToInput"
     />
     
    
@@ -80,6 +82,8 @@ defineEmits<{
 const { currentConversation, currentConversationId } = useConversations()
 const { isStreaming, canSendMessage, sendStreamMessage, abortStream } = useStreamChat()
 const { cards, addMessage, initializeFromMessages, generateCurrentSummary, messageBuffer } = useCardDeck()
+
+const chatInputRef = ref<InstanceType<typeof ChatInput>>()
 
 const isDev = true // 开发模式
 
@@ -171,5 +175,12 @@ const handleCopyCard = (content: string) => {
   console.log('Copied:', content)
   // 可以显示复制成功的提示
   // 这里可以添加toast通知
+}
+
+// 处理卡片拖拽到输入框
+const handleDragToInput = (content: string) => {
+  console.log('Dragged to input:', content)
+  // 调用ChatInput组件的方法将内容添加到输入框
+  chatInputRef.value?.handleDragToInput(content)
 }
 </script>

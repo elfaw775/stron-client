@@ -16,7 +16,6 @@
               class="start-chat-btn"
             >
               <MessageCircle class="w-5 h-5 mr-2" />
-              Start Chatting
             </Button>
           </div>
         </div>

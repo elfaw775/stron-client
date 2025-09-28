@@ -56,7 +56,7 @@ const MOUSE_RADIUS = 500
 const REPULSION_FORCE = 0.5
 const RETURN_FORCE = 0.05
 const FRICTION = 0.95
-const METEOR_INTERVAL = 1000 // 每1000毫秒（1秒）生成一颗流星
+const METEOR_INTERVAL = 10000 // 每1000毫秒（1秒）生成一颗流星
 
 const initCanvas = () => {
   canvas = canvasRef.value!
@@ -86,7 +86,7 @@ const createStars = () => {
       y,
       originalX: x,
       originalY: y,
-      size: Math.random() * 3 + 1,
+      size: Math.random() * 1 + 1,
       opacity: Math.random() * 0.8 + 0.2,
       vx: 0,
       vy: 0,
@@ -99,40 +99,14 @@ const createMeteor = () => {
   const colors = ['#ffffff', '#ffddaa', '#aaddff', '#ddaaff']
   const side = Math.floor(Math.random() * 4) // 0: top, 1: right, 2: bottom, 3: left
   let x, y, vx, vy
-  
-  switch (side) {
-    case 0: // 从顶部进入
+
       x = Math.random() * width
       y = -50
       vx = (Math.random() - 0.5) * 4
       vy = Math.random() * 3 + 2
-      break
-    case 1: // 从右侧进入
-      x = width + 50
-      y = Math.random() * height
-      vx = -(Math.random() * 3 + 2)
-      vy = (Math.random() - 0.5) * 4
-      break
-    case 2: // 从底部进入
-      x = Math.random() * width
-      y = height + 50
-      vx = (Math.random() - 0.5) * 4
-      vy = -(Math.random() * 3 + 2)
-      break
-    case 3: // 从左侧进入
-      x = -50
-      y = Math.random() * height
-      vx = Math.random() * 3 + 2
-      vy = (Math.random() - 0.5) * 4
-      break
-    default:
-      x = Math.random() * width
-      y = -50
-      vx = (Math.random() - 0.5) * 4
-      vy = Math.random() * 3 + 2
-  }
   
-  const maxLife = Math.random() * 100 + 50
+  
+  const maxLife = Math.random() * 300 + 200
   meteors.push({
     x,
     y,
@@ -203,7 +177,8 @@ const updateStars = () => {
 const updateMeteors = () => {
   // 生成新流星
   const currentTime = Date.now()
-  if (currentTime - lastMeteorTime > METEOR_INTERVAL) {
+  if (currentTime - lastMeteorTime > Math.floor(Math.random()*METEOR_INTERVAL)) {
+    for(let i=0;i<Math.floor(Math.random()*5);i++)
     createMeteor()
     lastMeteorTime = currentTime
   }
@@ -252,15 +227,6 @@ const drawStars = () => {
       ctx.arc(star.x, star.y, star.size * 2, 0, Math.PI * 2)
       ctx.fill()
     }
-  }
-  
-  // 绘制鼠标影响区域（调试用，可以注释掉）
-  if (isMouseInside) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.arc(mouseX, mouseY, MOUSE_RADIUS, 0, Math.PI * 2)
-    ctx.stroke()
   }
 }
 

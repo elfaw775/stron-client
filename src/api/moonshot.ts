@@ -1,4 +1,4 @@
-interface MoonshotMessage {
+export interface MoonshotMessage {
     role: 'system' | 'user' | 'assistant'
     content: string
 }
@@ -124,6 +124,7 @@ export class MoonshotAPI {
     async *streamChat(messages: MoonshotMessage[], options?: {
         temperature?: number
         maxTokens?: number
+        signal?: AbortSignal
     }): AsyncGenerator<MoonshotStreamChunk, void, unknown> {
         const request: MoonshotRequest = {
             model: 'moonshotai/kimi-k2-0905',
@@ -133,17 +134,18 @@ export class MoonshotAPI {
             stream: true
         }
 
-        console.log('Sending stream request to:', `${this.baseURL}/chat/completions`)
-        console.log('Stream request JSON:', JSON.stringify(request, null, 2))
-        console.log('Headers:', this.getHeaders())
+       // console.log('Sending stream request to:', `${this.baseURL}/chat/completions`)
+        //console.log('Stream request JSON:', JSON.stringify(request, null, 2))
+        //console.log('Headers:', this.getHeaders())
 
         const response = await fetch(`${this.baseURL}/chat/completions`, {
             method: 'POST',
             headers: this.getHeaders(),
-            body: JSON.stringify(request)
+            body: JSON.stringify(request),
+            signal: options?.signal
         })
 
-        console.log('Stream response status:', response.status)
+        //console.log('Stream response status:', response.status)
 
         if (!response.ok) {
             const error = await response.text()
@@ -161,6 +163,11 @@ export class MoonshotAPI {
 
         try {
             while (true) {
+                // 检查是否被中止
+                if (options?.signal?.aborted) {
+                    throw new DOMException('Stream aborted', 'AbortError')
+                }
+
                 const { done, value } = await reader.read()
                 if (done) break
 

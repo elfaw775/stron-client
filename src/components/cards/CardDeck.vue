@@ -23,6 +23,7 @@
         :is-collapsed="isCollapsed"
         @select="handleCardSelect"
         @reply="handleCardReply"
+        @drag-to-input="handleDragToInput"
       />
     </div>
 
@@ -75,6 +76,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   replyToCard: [card: Card]
   copyCard: [content: string]
+  dragToInput: [content: string]
 }>()
 
 const isCollapsed = ref(true) // 默认折叠
@@ -138,6 +140,27 @@ const replyToCard = () => {
 // 处理卡片双击回复
 const handleCardReply = (card: Card) => {
   emit('replyToCard', card)
+}
+
+// 处理卡片拖拽到输入框
+const handleDragToInput = (content: string) => {
+  console.log('CardDeck handling drag to input:', content)
+  emit('dragToInput', content)
+  
+  // 确保所有拖拽状态被重置
+  setTimeout(() => {
+    // 移除所有可能的拖拽样式
+    document.body.classList.remove('dragging-card')
+    document.body.style.cursor = ''
+    document.body.style.overflow = ''
+    document.body.style.userSelect = ''
+    
+    // 移除输入区域的拖拽样式
+    const inputArea = document.querySelector('.chat-input-area')
+    if (inputArea) {
+      inputArea.classList.remove('drag-over')
+    }
+  }, 50)
 }
 
 const formatDetailTime = (date: Date) => {
