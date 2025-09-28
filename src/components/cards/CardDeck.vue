@@ -11,6 +11,33 @@
       <span class="card-count">{{ displayCards.length }}</span>  
     </button>
 
+    <!-- 多选模式工具栏 -->
+    <div v-if="!isCollapsed" class="toolbar">
+      <div class="toolbar-left">
+        <button 
+          @click="toggleMultiSelectMode" 
+          class="toolbar-button"
+          :class="{ 'active': isMultiSelectMode }"
+        >
+          <CheckSquare v-if="isMultiSelectMode" class="w-4 h-4" />
+          <Square v-else class="w-4 h-4" />
+          多选
+        </button>
+      </div>
+      
+      <div class="toolbar-right" v-if="isMultiSelectMode">
+        <button 
+          @click="summarizeSelectedCards" 
+          class="toolbar-button primary"
+          :disabled="selectedCardIds.size === 0 || isSummarizing"
+        >
+          <div v-if="isSummarizing" class="loading-spinner"></div>
+          <MessageSquare v-else class="w-4 h-4" />
+          {{ isSummarizing ? 'AI总结中...' : 'AI总结到输入框' }}
+        </button>
+      </div>
+    </div>
+
     <!-- 扑克牌容器 -->
     <div class="cards-container" v-if="!isCollapsed">
       <PlayingCard
@@ -19,8 +46,9 @@
         :card="card"
         :index="index"
         :total-cards="displayCards.length"
-        :is-selected="selectedCardId === card.id"
+        :is-selected="isMultiSelectMode ? selectedCardIds.has(card.id) : selectedCardId === card.id"
         :is-collapsed="isCollapsed"
+        :multi-select-mode="isMultiSelectMode"
         @select="handleCardSelect"
         @reply="handleCardReply"
         @drag-to-input="handleDragToInput"
@@ -31,7 +59,7 @@
     <div v-if="selectedCard && !isCollapsed" class="card-detail">
       <div class="detail-content">
         <div class="detail-header">
-          <span class="detail-sender">{{ selectedCard.sender === 'user' ? '用户' : 'AI' }}</span>
+          <span class="detail-sender">AI总结</span>
           <span class="detail-time">{{ formatDetailTime(selectedCard.timestamp) }}</span>
           <button @click="closeDetail" class="close-button">
             <X class="w-4 h-4" />
@@ -58,7 +86,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import PlayingCard from './PlayingCard.vue'
-import { ChevronUp, ChevronDown, X, Copy, Reply } from 'lucide-vue-next'
+import { ChevronUp, ChevronDown, X, Copy, Reply, CheckSquare, Square, MessageSquare } from 'lucide-vue-next'
 
 interface Card {
   id: string
@@ -77,10 +105,14 @@ const emit = defineEmits<{
   replyToCard: [card: Card]
   copyCard: [content: string]
   dragToInput: [content: string]
+  summarizeCards: [cards: Card[]]
 }>()
 
 const isCollapsed = ref(true) // 默认折叠
 const selectedCardId = ref<string | null>(null)
+const selectedCardIds = ref<Set<string>>(new Set()) // 多选卡片ID集合
+const isMultiSelectMode = ref(false) // 多选模式
+const isSummarizing = ref(false) // AI总结中状态
 
 const displayCards = computed(() => {
   // 显示所有总结卡片
@@ -91,12 +123,18 @@ const selectedCard = computed(() => {
   return displayCards.value.find(card => card.id === selectedCardId.value)
 })
 
+const selectedCards = computed(() => {
+  return displayCards.value.filter(card => selectedCardIds.value.has(card.id))
+})
+
 const deckClasses = computed(() => [
   'card-deck-footer',
   {
     'collapsed': isCollapsed.value,
     'has-cards': displayCards.value.length > 0,
-    'has-selection': selectedCardId.value !== null
+    'has-selection': selectedCardId.value !== null,
+    'multi-select-mode': isMultiSelectMode.value,
+    'has-multi-selection': selectedCardIds.value.size > 0
   }
 ])
 
@@ -104,14 +142,62 @@ const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
   if (isCollapsed.value) {
     selectedCardId.value = null
+    selectedCardIds.value.clear()
+    isMultiSelectMode.value = false
+  }
+}
+
+const toggleMultiSelectMode = () => {
+  isMultiSelectMode.value = !isMultiSelectMode.value
+  if (!isMultiSelectMode.value) {
+    selectedCardIds.value.clear()
+  } else {
+    selectedCardId.value = null
   }
 }
 
 const handleCardSelect = (cardId: string) => {
-  if (selectedCardId.value === cardId) {
-    selectedCardId.value = null
+  if (isMultiSelectMode.value) {
+    // 多选模式
+    if (selectedCardIds.value.has(cardId)) {
+      selectedCardIds.value.delete(cardId)
+    } else {
+      selectedCardIds.value.add(cardId)
+    }
+    // 触发响应式更新
+    selectedCardIds.value = new Set(selectedCardIds.value)
   } else {
-    selectedCardId.value = cardId
+    // 单选模式
+    if (selectedCardId.value === cardId) {
+      selectedCardId.value = null
+    } else {
+      selectedCardId.value = cardId
+    }
+  }
+}
+
+const selectAllCards = () => {
+  selectedCardIds.value = new Set(displayCards.value.map(card => card.id))
+}
+
+const clearSelection = () => {
+  selectedCardIds.value.clear()
+  selectedCardIds.value = new Set()
+}
+
+const summarizeSelectedCards = async () => {
+  if (selectedCards.value.length > 0) {
+    isSummarizing.value = true
+    try {
+      emit('summarizeCards', selectedCards.value)
+      // 清空选择
+      clearSelection()
+    } finally {
+      // 延迟重置状态，给用户足够的视觉反馈
+      setTimeout(() => {
+        isSummarizing.value = false
+      }, 1000)
+    }
   }
 }
 
@@ -207,6 +293,14 @@ defineExpose({
   height: 300px;
 }
 
+.card-deck-footer.multi-select-mode:not(.collapsed) {
+  height: 250px;
+}
+
+.card-deck-footer.multi-select-mode.has-multi-selection:not(.collapsed) {
+  height: 250px;
+}
+
 .toggle-button {
   position: absolute;
   top: -35px;
@@ -241,6 +335,97 @@ defineExpose({
   padding: 2px 6px;
 }
 
+.toolbar {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  z-index: 10;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #666;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
+}
+
+.toolbar-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 1);
+  color: #333;
+  transform: translateY(-1px);
+}
+
+.toolbar-button.active {
+  background: #000000;
+  color: white;
+  border-color: #4CAF50;
+}
+
+.toolbar-button.primary {
+  background: #000000;
+  color: white;
+  border-color: #000000;
+}
+
+.toolbar-button.primary:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: #686868;
+}
+
+.toolbar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.selection-count {
+  font-size: 12px;
+  color: #666;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  backdrop-filter: blur(5px);
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .cards-container {
   position: relative;
   width: 100%;
@@ -248,7 +433,7 @@ defineExpose({
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  padding: 20px;
+  padding: 50px 20px 20px; /* 增加顶部padding为工具栏留空间 */
   overflow: hidden;
 }
 

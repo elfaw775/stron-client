@@ -12,6 +12,13 @@
         <span class="card-number">{{ cardNumber }}</span>
         <span class="card-type">📝</span>
       </div>
+      
+      <!-- 多选模式指示器 -->
+      <div v-if="multiSelectMode" class="multi-select-indicator">
+        <div class="checkbox" :class="{ 'checked': isSelected }">
+          <div v-if="isSelected" class="checkmark">✓</div>
+        </div>
+      </div>
       <div class="card-body">
         <p class="card-text">{{ truncatedContent }}</p>
         <p v-if="card.messageRange" class="card-range">{{ card.messageRange }}</p>
@@ -46,6 +53,7 @@ const props = defineProps<{
   totalCards: number
   isSelected: boolean
   isCollapsed: boolean
+  multiSelectMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -74,7 +82,8 @@ const cardClasses = computed(() => [
     'selected': props.isSelected,
     'collapsed': props.isCollapsed,
     'summary-card': props.card.sender === 'summary',
-    'dragging': isDragging.value
+    'dragging': isDragging.value,
+    'multi-select-mode': props.multiSelectMode
   }
 ])
 
@@ -501,5 +510,45 @@ onUnmounted(() => {
 
 :global(body.dragging-card *) {
   cursor: grabbing !important;
+}
+
+/* 多选模式样式 */
+.playing-card.multi-select-mode {
+  cursor: pointer;
+}
+
+.playing-card.multi-select-mode.selected {
+  border-color: #4CAF50 !important;
+  background: linear-gradient(145deg, #e8f5e8, #d4edda) !important;
+}
+
+.multi-select-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 10;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ddd;
+  border-radius: 3px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.checkbox.checked {
+  background: #4CAF50;
+  border-color: #4CAF50;
+}
+
+.checkmark {
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
 }
 </style>
